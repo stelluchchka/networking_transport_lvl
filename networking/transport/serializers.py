@@ -3,9 +3,14 @@ from transport.models import Segment
 from rest_framework import serializers
 
 class MessageSerializer(serializers.ModelSerializer):
+    binary_file = serializers.SerializerMethodField()
+
     class Meta:
         model = Message
-        fields = "__all__"
+        fields = ['user', 'time', 'file', 'binary_file']
+
+    def get_binary_file(self, obj):
+        return obj.binary_file
 
 class SegmentSerializer(serializers.ModelSerializer):
     segment_len = serializers.SerializerMethodField()

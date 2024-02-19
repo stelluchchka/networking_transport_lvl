@@ -10,7 +10,6 @@ from rest_framework.views import APIView
 from rest_framework.decorators import api_view
 from django.views import View
 from django.http import JsonResponse
-import os
 from django.views.decorators.csrf import csrf_exempt
 
 # import requests
@@ -38,12 +37,12 @@ class SegmentView(APIView):
         for i in range(new_message.segments_len):
             new_message.add_segment(i, new_message.file.read(1000))
 
-
         message = Message.objects.latest('id')
         segments =  Segment.objects.filter(message=message)
-        
         serializer = SegmentSerializer(segments, many=True)
-        # serializer = MessageSerializer(message, many=True)
+        
+        # message = Message.objects.all()       вывод всех сообщений
+        # serializer = MessageSerializer(message)
         if message.error == False:
             return Response(serializer.data)
         else:

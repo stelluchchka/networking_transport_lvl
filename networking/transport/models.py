@@ -1,9 +1,10 @@
 from django.db import models
+import base64
 
 class Message(models.Model):
     user = models.CharField(max_length=50, default="incognito")
     time = models.DateTimeField(auto_now=True)
-    file = models.FileField(blank=True)
+    file = models.FileField(blank=True, upload_to='message_files/')
     error = models.BooleanField(default=False)
 
     @property
@@ -12,7 +13,8 @@ class Message(models.Model):
             self.file.seek(0)
             binary_data = self.file.read()
             self.file.seek(0)
-            return binary_data
+            # return binary_data
+            return base64.b64encode(binary_data).decode('utf-8')
         return None
     @property
     def segments_len(self):
