@@ -4,7 +4,7 @@ import base64
 class Message(models.Model):
     user = models.CharField(max_length=50, default="incognito")
     time = models.DateTimeField(auto_now=True)
-    file = models.FileField(blank=True, upload_to='message_files/')
+    file = models.FileField(blank=True)
     error = models.BooleanField(default=False)
 
     @property
