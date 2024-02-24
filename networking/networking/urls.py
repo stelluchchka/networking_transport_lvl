@@ -1,12 +1,14 @@
 from django.contrib import admin
 from django.urls import path
-from transport.views import SegmentView
+from transport.views import SendSegmentView
+from transport.views import TransferSegmentView
 from django.conf import settings
 from django.conf.urls.static import static
 
 
 urlpatterns = [
     # path(r'messages/', views.get, name='get message'),
-    path('segmentation/', SegmentView.as_view(), name='segment'),
+    path('segmentation/', SendSegmentView.as_view(), name='segmentation'),
+    path('transfer/', TransferSegmentView.as_view(), name='transfer'),
     path('admin/', admin.site.urls),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

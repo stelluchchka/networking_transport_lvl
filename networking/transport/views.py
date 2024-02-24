@@ -24,7 +24,7 @@ import base64
 #     return Response(serializer.data)
 
 
-class SegmentView(APIView):
+class SendSegmentView(APIView):
     def get(self, request):
         message = Message.objects.all()
         serializer = MessageSerializer(message, many=True)
@@ -78,3 +78,9 @@ class SegmentView(APIView):
                             # Проверяем ответ
                 # if response.status_code !=  200:
                 #     print(f"Error sending segment {i +  1}: {response.text}")
+        
+class TransferSegmentView(APIView):
+    def get(self, request):
+        message = Message.objects.all()
+        serializer = MessageSerializer(message, many=True)
+        return Response(serializer.data)
