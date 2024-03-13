@@ -7,21 +7,11 @@ from rest_framework.views import APIView
 from django.views.decorators.csrf import csrf_exempt
 import base64
 import requests
-# from kafka import KafkaProducer
-# from kafka import KafkaConsumer
+from kafka import KafkaProducer
+from kafka import KafkaConsumer
 import json
 from PIL import Image
 import io
-
-Messages = []
-
-class class_message:
-    def __init__(self, time, segment_data, segment_len, segment_num):
-        self.segment_data = segment_data
-        self.time = time
-        self.segment_len = segment_len
-        self.segment_num = segment_num
-
 
 class SendSegmentView(APIView):
     def get(self, request):
@@ -64,51 +54,58 @@ class SendSegmentView(APIView):
 class TransferSegmentView(APIView):
     @csrf_exempt
     def post(self, request):
+        producer = KafkaProducer(bootstrap_servers='localhost:9092')
+ 
+        data = {
+            'id': request.data['time'],
+            'segment_data': request.data['segment_data'],
+            'segment_len': int(request.data['segment_len']),
+            'segment_num': int(request.data['segment_num'])
+        }
 
-        # producer = KafkaProducer(bootstrap_servers='localhost:9000')
+        value_to_send = json.dumps(data).encode('utf-8')
 
-        id = request.data['time']
-        segment_data=request.data['segment_data']
-        segment_len = int(request.data['segment_len'])
-        segment_num = int(request.data['segment_num'])
-        
-        # data = {
-        #     'id': request.data['time'],
-        #     'segment_data': request.data['segment_data'],
-        #     'segment_len': int(request.data['segment_len']),
-        #     'segment_num': int(request.data['segment_num'])
-        # }
-
-        # value_to_send = json.dumps(data).encode('utf-8')
-
-        # future = producer.send('product_topic', key=json.dumps(id).encode('utf-8'), value=value_to_send)
-        # result = future.get(timeout=120)
-        # producer.flush()
-        # # producer.send('product_topic', key=b'product_category_id', value=b'product_data')
-
-
-        ms = class_message(id, segment_data, segment_len, segment_num)
-        Messages.append(ms)
-
-        if int(request.data['segment_num']) == int(request.data['segment_len']) - 1:
-            str_file = ''
-            # id = data.id
-            Messages.sort(key=lambda x: x.segment_num)
-            for i in range(int(request.data['segment_len'])):
-                str_file += Messages[i].segment_data
-            # print(file)
-            image_bytes = base64.b64decode(str_file)
-            image_data = io.BytesIO(image_bytes)
-            image = Image.open(image_data)
-            image.show()
-
+        future = producer.send('segment_topic', key=json.dumps(data['id']).encode('utf-8'), value=value_to_send)
+        result = future.get(timeout=120)
+        producer.flush()
+        producer.send('segment_topic', key=b'segment_category_id', value=b'data')
         return Response({"message": "success"})
 
+# class ConsumerSegmentView(APIView):
+#     @csrf_exempt
+#     def post(self, request):
+# # def Consume():
+#         consumer = KafkaConsumer('segment_topic')
+#             #     consumer = KafkaConsumer(
+#             # 'segment_topic',
+#             # bootstrap_servers='localhost:9092', # Укажите адрес вашего Kafka брокера
+#             # group_id='discount_segment_group',
+#             # auto_offset_
 
-# def Consume():
-#     consumer = KafkaConsumer('product_topic')
-#     for msg in consumer:
-#         print (msg)
-#     consumer = KafkaConsumer('product_topic', group_id='discount_product_group')
-#     for msg in consumer:
-#         print (msg)
+#         for msg in consumer:
+#             print (msg)
+#         consumer = KafkaConsumer('segment_topic', group_id='discount_segment_group')
+#         for msg in consumer:
+#             print (msg)
+    
+def consume_kafka_messages(topic, group_id=None):
+    kafka_config = {
+        'bootstrap_servers': 'localhost:9092',
+        'auto_offset_reset': 'earliest',
+        'enable_auto_commit': False,
+        'group_id': group_id,
+    }
+    
+    consumer = KafkaConsumer(topic, **kafka_config)
+    
+    for msg in consumer:
+        print(msg)
+        # Здесь можно добавить обработку сообщения
+    
+    consumer.close()
+
+class ConsumerSegmentView(APIView):
+    @csrf_exempt
+    def post(self, request):
+        consume_kafka_messages('segment_topic', group_id='discount_segment_group')
+        return Response({"message": "Kafka messages consumed successfully."})
