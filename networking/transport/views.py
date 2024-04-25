@@ -12,14 +12,16 @@ import requests
 import threading
 from typing import Optional
 
-# topic = "segment_topic"
-channel_layer_url = "http://192.168.95.40:8000/dl/"
-application_layer_url = "http://192.168.95.40:5000/receiveFile/"
-# producer = KafkaProducer(
-#         bootstrap_servers=['localhost:9092'],
-#         value_serializer=lambda x: json.dumps(x).encode('utf-8'),
-#         batch_size=1
-#     )
+channel_layer_url = "http://localhost:8000/dl/"
+transport_layer_url = "http://localhost:8000/transfer/"
+application_layer_url = "http://localhost:8000/receiveFile/" #5000
+
+topic = "segment_topic"
+producer = KafkaProducer(
+        bootstrap_servers=['localhost:9092'],
+        value_serializer=lambda x: json.dumps(x).encode('utf-8'),
+        batch_size=1
+    )
 
 class Segment:
     def __init__(self, segment_num: int, payload: bytes, time: datetime.datetime):
@@ -72,84 +74,98 @@ def SendSegment(request):
             'segment_num': i,
         }
         response = requests.get(channel_layer_url,data=data)
-        # print(response.status_code)
-        print(data)
+        # print(data)
 
     if response.status_code == 200:
         return Response({"message": "ok"}, status=response.status_code)
     else:
         return Response({"message": "error"}, status=response.status_code)
 
-    # print(request.data)   segment_data time segment_len segment_num    
+
+@swagger_auto_schema(methods=['post'], request_body=openapi.Schema(type=openapi.TYPE_OBJECT, properties={
+        'segment_num': openapi.Schema(type=openapi.TYPE_INTEGER, description='Номер сегмента'),
+        'segment_len': openapi.Schema(type=openapi.TYPE_INTEGER, description='Общее число сегментов'),
+        'segment_data': openapi.Schema(type=openapi.TYPE_STRING, description='Тело сегмента'),
+        'time': openapi.Schema(type=openapi.TYPE_INTEGER, description='Время отправки сообщения'),
+        'username': openapi.Schema(type=openapi.TYPE_STRING, description='Отправитель'),
+    }),
+    operation_description="Положить сегмент в брокер сообщений Kafka"
+)
+@csrf_exempt
+@api_view(['POST'])
+def TransferSegment(request):
+    producer.send(topic, request.data)
+    return HttpResponse(status=200) 
 
 
+def send_mesg_to_app_layer(time, username, file, isError):
+    json_data = {
+        "time": time,
+        "username": username,
+        "file": file,
+        "isError": isError
+    } 
+    requests.post(application_layer_url, json=json_data)
+    return 0
 
+def read_messages_from_kafka(consumer):
+    message_recieved = []
+    while True:
+        for message in consumer:
+            message_str = message.value
+            if (not len(message_recieved) or message_recieved[-1]['time'] == message_str['time']):
+                message_recieved.append(message_str)
+                if (message_str['segment_num'] == 0):
+                    if (message_str['segments_len'] == len(message_recieved)):
+                        sorted_message = sorted(message_recieved, key=lambda x: x['segment_num'], reverse=True)
+                        msg = ""
+                        for i in range(len(sorted_message)):
+                            msg += sorted_message[i]['file']
 
-
-
-
-
-# @swagger_auto_schema(methods=['post'], request_body=openapi.Schema(type=openapi.TYPE_OBJECT, properties={
-#         'segment_num': openapi.Schema(type=openapi.TYPE_INTEGER, description='Номер сегмента'),
-#         'segment_len': openapi.Schema(type=openapi.TYPE_INTEGER, description='Общее число сегментов'),
-#         'segment_data': openapi.Schema(type=openapi.TYPE_STRING, description='Тело сегмента'),
-#         'time': openapi.Schema(type=openapi.TYPE_INTEGER, description='Время отправки сообщения'),
-#         'username': openapi.Schema(type=openapi.TYPE_STRING, description='Отправитель'),
-#     }),
-#     operation_description="Положить сегмент в брокер сообщений Kafka"
-# )
-# @csrf_exempt
-# @api_view(['POST'])
-# def TransferSegment(request):
-#     producer.send(topic, request.data)
-#     return HttpResponse(status=200) 
-
-
-# def send_mesg_to_app_layer(time, sender, text, isError):
-#     json_data = {
-#         "time": time,
-#         "sender": sender,
-#         "text": text,
-#         "isError": isError
-#     } 
-#     requests.post(application_service_url, json=json_data)
-
-#     return 0
-
-# def read_messages_from_kafka(consumer):
-#     message_recieved = []
-#     while True:
-#         for message in consumer:
-#             message_str = message.value
-#             if (not len(message_recieved) or message_recieved[-1]['dispatch_time'] == message_str['dispatch_time']):
-#                 message_recieved.append(message_str)
-#                 if (message_str['segment_num'] == 0):
-#                     if (message_str['segments_len'] == len(message_recieved)):
-#                         sorted_message = sorted(message_recieved, key=lambda x: x['segment_num'], reverse=True)
-#                         msg = ""
-#                         for i in range(len(sorted_message)):
-#                             msg += sorted_message[i]['segment_data']
-
-#                         send_mesg_to_app_layer(message_str['dispatch_time'], message_str['sender'], msg, 0)
-#                     else:
-#                         send_mesg_to_app_layer(message_str['dispatch_time'], message_str['sender'], "Error", 1)
-#                     message_recieved = []
-#             else:
-#                 send_mesg_to_app_layer(message_recieved[-1]['dispatch_time'], message_recieved[-1]['sender'], "Error", 1)
-#                 message_recieved = []
-#                 message_recieved.append(message_str)
-#                 print("Lost segment")
+                        send_mesg_to_app_layer(message_str['time'], message_str['username'], msg, 0)
+                    else:
+                        send_mesg_to_app_layer(message_str['time'], message_str['username'], "Error", 1)
+                    message_recieved = []
+            else:
+                send_mesg_to_app_layer(message_recieved[-1]['time'], message_recieved[-1]['username'], "Error", 1)
+                message_recieved = []
+                message_recieved.append(message_str)
+                print("Lost segment")
             
 
-# consumer = KafkaConsumer(
-#         topic,
-#         bootstrap_servers=['localhost:9092'],
-#         value_deserializer=lambda x: json.loads(x.decode('utf-8')),
-#         group_id='test',
-#         auto_offset_reset='earliest',
-#         enable_auto_commit=True
-#     )
+consumer = KafkaConsumer(
+        topic,
+        bootstrap_servers=['localhost:9092'],
+        value_deserializer=lambda x: json.loads(x.decode('utf-8')),
+        group_id='test',
+        auto_offset_reset='earliest',
+        enable_auto_commit=True
+    )
 
-# consumer_thread = threading.Thread(target=read_messages_from_kafka, args=(consumer,))
+consumer_thread = threading.Thread(target=read_messages_from_kafka, args=(consumer,))
 
-# consumer_thread.start()
+consumer_thread.start()
+
+
+@api_view(['GET'])
+def dl(request):
+    data={
+        'segment_data': request.data['segment_data'],
+        'time': request.data['time'],
+        'segment_len': request.data['segment_len'],
+        'segment_num': request.data['segment_num'],
+    }
+    response = requests.post(transport_layer_url,data=data)
+    print("это канальный уровень")
+    print(data)
+
+    if response.status_code == 200:
+        return Response({"message": "ok"}, status=response.status_code)
+    else:
+        return Response({"message": "error"}, status=response.status_code)
+    
+@api_view(['POST'])
+def receiveFile(request):
+    print("это прикладной уровень")
+    print(request.data)
+    return Response({"message": "ok?"}, status=200)

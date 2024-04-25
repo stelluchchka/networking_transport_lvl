@@ -1,7 +1,9 @@
 from django.contrib import admin
 from django.urls import path
 from transport.views import SendSegment
-# from transport.views import TransferSegment
+from transport.views import TransferSegment
+from transport.views import dl
+from transport.views import receiveFile
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -25,9 +27,9 @@ schema_view = get_schema_view(
 )
 
 urlpatterns = [
-    # path(r'messages/', views.get, name='get message'),
     path('segmentation/', SendSegment),
-    # path('transfer/', TransferSegment),
-    path('admin/', admin.site.urls),
+    path('transfer/', TransferSegment),
+    path('dl/', dl),
+    path('receiveFile/', receiveFile),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
 ]
