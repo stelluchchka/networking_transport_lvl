@@ -1,4 +1,3 @@
-import base64
 import datetime
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
@@ -10,7 +9,6 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view
 import requests
 import threading
-from typing import Optional
 
 channel_layer_url = "http://localhost:8000/dl/"
 transport_layer_url = "http://localhost:8000/transfer/"
@@ -21,6 +19,15 @@ producer = KafkaProducer(
         bootstrap_servers=['localhost:9092'],
         value_serializer=lambda x: json.dumps(x).encode('utf-8'),
         batch_size=1
+    )
+
+consumer = KafkaConsumer(
+        topic,
+        bootstrap_servers=['localhost:9092'],
+        value_deserializer=lambda x: json.loads(x.decode('utf-8')),
+        group_id='test',
+        auto_offset_reset='earliest',
+        enable_auto_commit=True
     )
 
 class Segment:
@@ -59,6 +66,7 @@ class Message:
     }),
     operation_description="Разбить сообщение на сегменты длинной 1000 байт и передать их на канальный уровень"
 )
+# 1 сегментация
 @api_view(['POST'])
 def SendSegment(request):
     try:
@@ -91,13 +99,16 @@ def SendSegment(request):
     }),
     operation_description="Положить сегмент в брокер сообщений Kafka"
 )
+# 3 метод TransferSegment
 @csrf_exempt
 @api_view(['POST'])
 def TransferSegment(request):
+    print("это метод TransferSegment")
+    print(request.data)
     producer.send(topic, request.data)
     return HttpResponse(status=200) 
 
-
+# 5 отправить на прикладной уровень
 def send_mesg_to_app_layer(time, username, file, isError):
     json_data = {
         "time": time,
@@ -108,6 +119,7 @@ def send_mesg_to_app_layer(time, username, file, isError):
     requests.post(application_layer_url, json=json_data)
     return 0
 
+# 4 чтение из кафки
 def read_messages_from_kafka(consumer):
     message_recieved = []
     while True:
@@ -124,29 +136,19 @@ def read_messages_from_kafka(consumer):
 
                         send_mesg_to_app_layer(message_str['time'], message_str['username'], msg, 0)
                     else:
-                        send_mesg_to_app_layer(message_str['time'], message_str['username'], "Error", 1)
+                        send_mesg_to_app_layer(message_str['time'], message_str['username'], "-", 1)
                     message_recieved = []
             else:
-                send_mesg_to_app_layer(message_recieved[-1]['time'], message_recieved[-1]['username'], "Error", 1)
+                send_mesg_to_app_layer(message_recieved[-1]['time'], message_recieved[-1]['username'], "-", 1)
                 message_recieved = []
                 message_recieved.append(message_str)
                 print("Lost segment")
-            
-
-consumer = KafkaConsumer(
-        topic,
-        bootstrap_servers=['localhost:9092'],
-        value_deserializer=lambda x: json.loads(x.decode('utf-8')),
-        group_id='test',
-        auto_offset_reset='earliest',
-        enable_auto_commit=True
-    )
 
 consumer_thread = threading.Thread(target=read_messages_from_kafka, args=(consumer,))
 
 consumer_thread.start()
 
-
+# 2 канальный уровень
 @api_view(['GET'])
 def dl(request):
     data={
@@ -163,7 +165,8 @@ def dl(request):
         return Response({"message": "ok"}, status=response.status_code)
     else:
         return Response({"message": "error"}, status=response.status_code)
-    
+
+# 6 прикладной уровень
 @api_view(['POST'])
 def receiveFile(request):
     print("это прикладной уровень")
