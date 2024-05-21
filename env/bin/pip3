@@ -1,4 +1,4 @@
-#!/Users/stella/projects/networking_transport_lvl/env/bin/python3
+#!/Users/stella/projects/networking_transport_lvl/net_env/bin/python3.12
 # -*- coding: utf-8 -*-
 import re
 import sys
